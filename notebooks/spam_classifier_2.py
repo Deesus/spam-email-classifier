@@ -26,7 +26,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import classification_report, f1_score, accuracy_score
 
-from datasets import load_dataset, Dataset
+from datasets import Dataset
 from transformers import AutoTokenizer, DataCollatorWithPadding, TFAutoModelForSequenceClassification
 import tensorflow as tf
 # -
@@ -61,6 +61,7 @@ for file_path in ham_file_paths:
 df_ham.head()
 
 # + jupyter={"outputs_hidden": false}
+# TODO: delete later:
 # test_set = pd.read_csv('../data/enron_test_set.csv')
 # train_set = pd.read_csv('../data/enron_train_set.csv')
 
@@ -142,6 +143,9 @@ x_test = test_set['text']
 y_test = test_set['label']
 # -
 
+print('Train size:', len(x_train))
+print('Test size:', len(x_test))
+
 # ## Support Vector Machine:
 
 # +
@@ -152,14 +156,40 @@ model_SVM = Pipeline(
     ])
 
 model_SVM.fit(x_train, y_train)
-
-# +
-# svm_test_predictions = 
-# svm_train_predictions = 
 # -
 
-print('Train Accuracy:', model_SVM.score(x_train, y_train))
+svm_train_predictions = model_SVM.predict(x_train)
+svm_test_predictions = model_SVM.predict(x_test)
+
+print('Train accuracy:', model_SVM.score(x_train, y_train))
+print('Train F1 score:', f1_score(y_train, svm_train_predictions, average="macro"))
+print(classification_report(y_train, svm_train_predictions))
+print('\n')
 print('Test accuracy:', model_SVM.score(x_test, y_test))
+print('Test F1 score:', f1_score(y_test, svm_test_predictions, average="macro"))
+print(classification_report(y_test, svm_test_predictions))
+
+# ## XGBoost:
+
+# +
+model_xgb = Pipeline([
+    ('vectorizer', TfidfVectorizer(stop_words=spacy_stopwords)),
+    ('classifier', XGBClassifier(objective='binary:logistic'))
+])
+
+model_xgb.fit(x_train, y_train)
+# -
+
+xgb_train_predictions = model_xgb.predict(x_train)
+xgb_test_predictions = model_xgb.predict(x_test)
+
+print('Train accuracy:', model_xgb.score(x_train, y_train))
+print('Train F1 score:', f1_score(y_train, xgb_train_predictions, average="macro"))
+print(classification_report(y_train, xgb_train_predictions))
+print('\n')
+print('Test accuracy:', model_xgb.score(x_test, y_test))
+print('Test F1 score:', f1_score(y_test, xgb_test_predictions, average="macro"))
+print(classification_report(y_test, xgb_test_predictions))
 
 # ## Process Data for Transformer
 
@@ -302,14 +332,6 @@ def predict(text: str):
     return prediction
 
 
-test_predictions = [predict(x) for x in test_set['text']]
-test_set_y = test_set['label'].to_list()
-
-print('Testset F1 Score:', f1_score(test_set_y, test_predictions, average="macro"))
-print('Testset Accuracy:', accuracy_score(test_set_y, test_predictions))
-print('\n')
-print(classification_report(test_set_y, test_predictions))
-
 train_predictions = [predict(x) for x in train_set['text']]
 train_set_y = train_set['label'].to_list()
 
@@ -317,5 +339,13 @@ print('Trainset F1 Score:', f1_score(train_set_y, train_predictions, average="ma
 print('Trainset Accuracy:', accuracy_score(train_set_y, train_predictions))
 print('\n')
 print(classification_report(train_set_y, train_predictions))
+
+test_predictions = [predict(x) for x in test_set['text']]
+test_set_y = test_set['label'].to_list()
+
+print('Testset F1 Score:', f1_score(test_set_y, test_predictions, average="macro"))
+print('Testset Accuracy:', accuracy_score(test_set_y, test_predictions))
+print('\n')
+print(classification_report(test_set_y, test_predictions))
 
 
