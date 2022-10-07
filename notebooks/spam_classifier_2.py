@@ -13,13 +13,18 @@
 #     name: python3
 # ---
 
-# + _uuid="8f2839f25d086af736a60e9eeb907d3b93b6e0e5" _cell_guid="b1076dfc-b9ad-4769-8c92-a6c4dae69d19"
+# + _cell_guid="b1076dfc-b9ad-4769-8c92-a6c4dae69d19" _uuid="8f2839f25d086af736a60e9eeb907d3b93b6e0e5"
 import pandas as pd
 import glob
 import matplotlib.pyplot as plt
 import numpy as np
+import spacy
+from xgboost import XGBClassifier
 
-from sklearn.metrics import classification_report, f1_score
+from sklearn.svm import LinearSVC
+from sklearn.pipeline import Pipeline
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics import classification_report, f1_score, accuracy_score
 
 from datasets import load_dataset, Dataset
 from transformers import AutoTokenizer, DataCollatorWithPadding, TFAutoModelForSequenceClassification
@@ -55,9 +60,26 @@ for file_path in ham_file_paths:
 
 df_ham.head()
 
-# ## Explore Data
+# + jupyter={"outputs_hidden": false}
+# test_set = pd.read_csv('../data/enron_test_set.csv')
+# train_set = pd.read_csv('../data/enron_train_set.csv')
 
 # +
+combined_dataset = pd.concat([df_ham, df_spam])
+
+# Shuffle data:
+combined_dataset = combined_dataset.sample(frac=1)
+
+# +
+train_test_split = int(len(combined_dataset) * 0.9)
+
+train_set = combined_dataset[:train_test_split]
+test_set = combined_dataset[train_test_split:]
+# -
+
+# ## Explore Data
+
+# + jupyter={"outputs_hidden": true}
 # Set size of plot:
 plt.rcParams["figure.figsize"] = (8, 8)
 
@@ -73,18 +95,6 @@ plt.title('Document Count')
 plt.xlabel('Category')
 plt.ylabel('Number of examples')
 plt.show()
-
-# +
-combined_dataset = pd.concat([df_ham, df_spam])
-
-# Shuffle data:
-combined_dataset = combined_dataset.sample(frac=1)
-
-# +
-train_test_split = int(len(combined_dataset) * 0.9)
-
-train_set = combined_dataset[:train_test_split]
-test_set = combined_dataset[train_test_split:]
 # -
 
 # Save data as csv:
@@ -110,6 +120,50 @@ print('Max length of document:', max_length)
 print('Avg length of documents:', avg_length)
 print('Median length of documents:', median_length)
 print('Std of document length:', std_length)
+# -
+
+# ## Process Data:
+
+# We only need lemmatizer from spaCy:
+# see <https://spacy.io/usage/processing-pipelines#disabling>
+nlp = spacy.load('en_core_web_trf',
+                 disable=['tagger', 'parser', 'ner', 'entity_linker', 'entity_ruler', 'textcat', 'textcat_multilabel',
+                          'attribute_ruler', 'senter', 'sentencizer', 'tok2vec', 'transformer']
+                 )
+
+# remove stop words (parameter scaling):
+spacy_stopwords = spacy.lang.en.stop_words.STOP_WORDS
+
+# +
+x_train = train_set['text']
+y_train = train_set['label']
+
+x_test = test_set['text']
+y_test = test_set['label']
+# -
+
+# ## Support Vector Machine:
+
+# +
+model_SVM = Pipeline(
+    [
+        ('vectorizer', TfidfVectorizer(stop_words=spacy_stopwords)),
+        ('classifier', LinearSVC())
+    ])
+
+model_SVM.fit(x_train, y_train)
+
+# +
+# svm_test_predictions = 
+# svm_train_predictions = 
+# -
+
+print('Train Accuracy:', model_SVM.score(x_train, y_train))
+print('Test accuracy:', model_SVM.score(x_test, y_test))
+
+# ## Process Data for Transformer
+
+dataset = Dataset.from_pandas(train_set)
 
 # +
 MAX_CHAR_LENGTH = 2000
@@ -117,10 +171,6 @@ MAX_CHAR_LENGTH = 2000
 percent_docs_over_2000 = combined_dataset['text'].map(lambda x: len(x) > MAX_CHAR_LENGTH).sum() / len(combined_dataset)
 print(f'Percent of documents that have character length greater than 2,000: {percent_docs_over_2000 * 100:.2f}%')
 # -
-
-# ## Process Data
-
-dataset = Dataset.from_pandas(train_set)
 
 MODEL_NAME = 'distilroberta-base'
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
@@ -167,7 +217,7 @@ class ThresholdStoppageCallback(tf.keras.callbacks.Callback):
         if val_acc >= self.threshold:
             self.model.stop_training = True
 
-# If validaiton accuracy reaches 99.7% accuracy, stop training:
+# If validation accuracy reaches 99.7% accuracy, stop training:
 threshold_stoppage_callback = ThresholdStoppageCallback(threshold=0.997)
 
 # +
@@ -195,7 +245,6 @@ model = TFAutoModelForSequenceClassification.from_pretrained(
 del tokenized_data
 del dataset
 del combined_dataset
-del train_set
 
 # +
 # TODO: update file path to local:
@@ -253,12 +302,20 @@ def predict(text: str):
     return prediction
 
 
-predictions = [predict(x) for x in test_set['text']]
+test_predictions = [predict(x) for x in test_set['text']]
+test_set_y = test_set['label'].to_list()
 
-test_set_y = test_set['label'].aggregateto_list()
+print('Testset F1 Score:', f1_score(test_set_y, test_predictions, average="macro"))
+print('Testset Accuracy:', accuracy_score(test_set_y, test_predictions))
+print('\n')
+print(classification_report(test_set_y, test_predictions))
 
-f1_score(test_set_y, predictions, average="macro")
+train_predictions = [predict(x) for x in train_set['text']]
+train_set_y = train_set['label'].to_list()
 
-print(classification_report(test_set_y, predictions))
+print('Trainset F1 Score:', f1_score(train_set_y, train_predictions, average="macro"))
+print('Trainset Accuracy:', accuracy_score(train_set_y, train_predictions))
+print('\n')
+print(classification_report(train_set_y, train_predictions))
 
 
