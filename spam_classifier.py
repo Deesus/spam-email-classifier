@@ -13,7 +13,9 @@
 #     name: python3
 # ---
 
-# + _cell_guid="b1076dfc-b9ad-4769-8c92-a6c4dae69d19" _uuid="8f2839f25d086af736a60e9eeb907d3b93b6e0e5"
+# # Spam Email Classification
+
+# +
 import pandas as pd
 import glob
 import matplotlib.pyplot as plt
@@ -31,9 +33,24 @@ from transformers import AutoTokenizer, DataCollatorWithPadding, TFAutoModelForS
 import tensorflow as tf
 # -
 
-# ### Read spam emails:
+# ## Read files:
+#
+# The Enron email dataset is divided into 6 parts, each composed of `spam/` and `ham/` folders, where the former contains spam emails (.txt files) and the latter containing non-spam emails. We'll first consolidate all the spam and ham text files into a single `spam/` and `ham/` folder.
+#
+# Upon examination, we also notice that some of the documents are encoded in ISO-8859, which will cause issues as we try to process the data. We'll need to convert these files to UTF-8 or ASCII. One way we can convert the encoding is using Linux's `inconv` package, which is pre-installed in most distros.
+#
+# The Bash syntax for converting a textfile, `FILE_NAME.txt`, to UTF-8 is as follows:
+# ```bash
+# iconv -f ISO-8859-1 -t UTF-8//TRANSLIT FILE_NAME.txt -o FILE_NAME.txt
+# ```
 
-spam_file_paths = glob.iglob('../input/harvardspamemailenron/data/spam/**')
+# We'll now read all the files and store the text as a Pandas DataFrame. Since our emails are already split into `spam/` and `ham/` folders, we can simultaneously (and easily) label our data based on which folder we're reading from. We'll use `1` to delineate spam and `0` as non-spam emails.
+#
+# In this particular dataset, all the email headers -- other than the _Subject_ -- have already been removed. We also want to keep the _Subject_ header because it often contains useful information. So there's no pre-processing to be done at this step.
+
+# ##### Read and save spam documents into a DataFrame:
+
+spam_file_paths = glob.iglob('../data/data/spam/**')
 df_spam = pd.DataFrame(columns=['text', 'label'])
 
 for file_path in spam_file_paths:
@@ -45,9 +62,10 @@ for file_path in spam_file_paths:
 
 df_spam.head()
 
-# ### Read ham emails:
+# ##### Read and save ham documents into a DataFrame:
+#
 
-ham_file_paths = glob.iglob('../input/harvardspamemailenron/data/ham/**')
+ham_file_paths = glob.iglob('../data/data/ham/**')
 df_ham = pd.DataFrame(columns=['text', 'label'])
 
 for file_path in ham_file_paths:
@@ -60,10 +78,9 @@ for file_path in ham_file_paths:
 
 df_ham.head()
 
-# + jupyter={"outputs_hidden": false}
-# TODO: delete later:
-# test_set = pd.read_csv('../data/enron_test_set.csv')
-# train_set = pd.read_csv('../data/enron_train_set.csv')
+# We'll now combine the spam and ham examples and split the data into train and test sets.
+#
+# Our dataset consists of 33,716 examples, and we'll set aside 10% of that for our test set. (We'll set aside a portion for our validation set later.)
 
 # +
 combined_dataset = pd.concat([df_ham, df_spam])
@@ -78,9 +95,19 @@ train_set = combined_dataset[:train_test_split]
 test_set = combined_dataset[train_test_split:]
 # -
 
-# ## Explore Data
+# Save data as csv:
+train_set.to_csv('../data/train_set.csv', index=False)
+test_set.to_csv('../data/test_set.csv', index=False)
 
-# + jupyter={"outputs_hidden": true}
+# ## Explore Data:
+#
+# Let's get a better understanding of our data.
+#
+# We'll notice that our dataset fairly balanced. This means that _accuracy_ becomes a more viable metric -- in addition to the more conventional F1 score used in spam classification. But more importantly, we know that we have a sufficient number of both spam and ham examples for our ML models.
+
+# +
+# Plot document count:
+
 # Set size of plot:
 plt.rcParams["figure.figsize"] = (8, 8)
 
@@ -98,16 +125,13 @@ plt.ylabel('Number of examples')
 plt.show()
 # -
 
-# Save data as csv:
-# combined_dataset.to_csv('../working/harvard_enron_email.csv', index=False)
-train_set.to_csv('../working/train_set.csv', index=False)
-test_set.to_csv('../working/test_set.csv', index=False)
-
 len_ham = len(df_ham)
 len_spam = len(df_spam)
 print('Ham Count:', len_ham)
 print('Spam Count:', len_spam)
 print('Total:', len_spam + len_ham)
+
+# We also take a look at the size (character length) of individual emails. Upon doing so, we'll notice that most of the emails are 720 characters or less. For comparison, a 500-word essay is approximately 3,000 - 3,500 characters. The largest document has an enormous 22,8377 characters. Since we will be creating a neural network (transformer), we will need our inputs to all be the same length (via truncating and padding). An input length of 22,000+ is far too large for our model, so we will need to decide that max length of our input before applying truncation.  Let's use 2,000 as the character limit -- only 19.25% of our data is larger than that size, and even if we lose information after truncation, we should be able to discern whether the email is spam or not by the 2,000 character mark.
 
 # +
 map_len = combined_dataset['text'].map(len)
@@ -121,19 +145,28 @@ print('Max length of document:', max_length)
 print('Avg length of documents:', avg_length)
 print('Median length of documents:', median_length)
 print('Std of document length:', std_length)
+
+# +
+MAX_CHAR_LENGTH = 2000
+
+percent_docs_over_2000 = combined_dataset['text'].map(lambda x: len(x) > MAX_CHAR_LENGTH).sum() / len(combined_dataset)
+print(f'Percent of documents that have character length greater than 2,000: {percent_docs_over_2000 * 100:.2f}%')
 # -
 
 # ## Process Data:
+#
+# We will vectorize all the documents using TF-IDF (term frequency–inverse document frequency), which calculates the frequency of a word in a document. Scikit-learn has the built-in [TfidfVectorizer](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html) that does exactly this. But before we feed vectorized documents into our model pipeline, we should remove stop words from the documents -- we will use [spaCy](https://spacy.io/) for that.
 
-# We only need lemmatizer from spaCy:
-# see <https://spacy.io/usage/processing-pipelines#disabling>
+# We only need lemmatizer from spaCy; see <https://spacy.io/usage/processing-pipelines#disabling>
 nlp = spacy.load('en_core_web_trf',
                  disable=['tagger', 'parser', 'ner', 'entity_linker', 'entity_ruler', 'textcat', 'textcat_multilabel',
                           'attribute_ruler', 'senter', 'sentencizer', 'tok2vec', 'transformer']
                  )
 
-# remove stop words (parameter scaling):
+# Remove stop words (parameter scaling):
 spacy_stopwords = spacy.lang.en.stop_words.STOP_WORDS
+
+# Finally, we need to split train and test data into x and y (e.g. `x_train` and `y_train`):
 
 # +
 x_train = train_set['text']
@@ -147,6 +180,7 @@ print('Train size:', len(x_train))
 print('Test size:', len(x_test))
 
 # ## Support Vector Machine:
+# As machine learning is an iterative process, we will try a couple of "conventional" machine learning models and see how well they perform in spam classification. We'll first try Linear Support Vector Classification, a standard text classification model. To measure the performance of the model, we'll use both accuracy and F1 score.
 
 # +
 model_SVM = Pipeline(
@@ -169,7 +203,11 @@ print('Test accuracy:', model_SVM.score(x_test, y_test))
 print('Test F1 score:', f1_score(y_test, svm_test_predictions, average="macro"))
 print(classification_report(y_test, svm_test_predictions))
 
+# ###### Analysis:
+# We were able to train our model fairly quickly, and as you can see, has a 99.98% F1 score on the train set and 98.96% on the test set. So, it performed fairly well. The ~1% drop in performance between train and test sets probably indicates a small degree of over-fitting. SVMs tend to be resistant to over-fitting, but we could almost certainly improve upon on this by fine-tuning the regularization parameter, `C`.
+
 # ## XGBoost:
+# Gradient boosting, and specifically XGBoost, has become a popular choice for many ML tasks. Let's see how well the ensemble algorithm performs for our spam classification task. As a pre-processing step, we can TF-IDF vectorizer and stop words that we used earlier.
 
 # +
 model_xgb = Pipeline([
@@ -191,16 +229,15 @@ print('Test accuracy:', model_xgb.score(x_test, y_test))
 print('Test F1 score:', f1_score(y_test, xgb_test_predictions, average="macro"))
 print(classification_report(y_test, xgb_test_predictions))
 
-# ## Process Data for Transformer
+# ##### Analysis:
+# The XGBoost model did relatively well (97.98% F1 score), but didn't fit our dataset as well Linear SVM. It also took noticeably more time to train than the SVM model.
+
+# ## Neural Network (Transformer):
+# Finally, we will build a more advanced model by creating a neural network. Unlike the previous models which used word frequencies, the neural network will "understand" the context of the words via [attention](https://arxiv.org/abs/1706.03762). As a result, we **don't** want to remove stop words in the documents; by stemming/lemmatizing we will be removing valuable information in the text.
+#
+# We'll use a pretrained model from [Hugging Face](https://huggingface.co), rather than creating a new one from scratch, and then fine-tune it to our specific task. We'll use [RoBERTa](https://arxiv.org/abs/1907.11692) architecture, which is an improved version of BERT; and more specifically, we'll use the ["distilled"](https://huggingface.co/distilroberta-base) version of RoBERTa, performs slightly worse than the regular RoBERTa, but has ~33% fewer parameters (and therefore is less resource intense and trains twice as fast).
 
 dataset = Dataset.from_pandas(train_set)
-
-# +
-MAX_CHAR_LENGTH = 2000
-
-percent_docs_over_2000 = combined_dataset['text'].map(lambda x: len(x) > MAX_CHAR_LENGTH).sum() / len(combined_dataset)
-print(f'Percent of documents that have character length greater than 2,000: {percent_docs_over_2000 * 100:.2f}%')
-# -
 
 MODEL_NAME = 'distilroberta-base'
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
@@ -208,6 +245,8 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 dataset = dataset.train_test_split(test_size=0.1)
 dataset = dataset.shuffle(seed=2)
 
+
+# As mentioned before, we will truncate the document if exceeds 2,000 characters. We also need to tokenize and pad our data.
 
 # +
 def preprocess(examples):
@@ -222,6 +261,11 @@ num_epochs = 15
 
 batches_per_epoch = len(tokenized_data['train']) // batch_size
 total_train_steps = int(batches_per_epoch * num_epochs)
+
+# Although completely optional, we'll create a few additional callback functions:
+# 1. We'll create a [learning rate scheduler](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules), which is a Keras/TensorFlow implementation of learning rate decay.
+# 2. Saving checkpoints (model weights) after each epoch.
+# 3. Early stoppage if the model's train accuracy achieves 99.7% accuracy.
 
 lr_scheduler = tf.keras.optimizers.schedules.PolynomialDecay(
     initial_learning_rate=1e-5, end_learning_rate=5e-9, decay_steps=total_train_steps
@@ -243,11 +287,11 @@ class ThresholdStoppageCallback(tf.keras.callbacks.Callback):
         self.threshold = threshold
 
     def on_epoch_end(self, epoch, logs=None):
-        val_acc = logs["sparse_categorical_accuracy"]
-        if val_acc >= self.threshold:
+        train_acc = logs["sparse_categorical_accuracy"]
+        if train_acc >= self.threshold:
             self.model.stop_training = True
 
-# If validation accuracy reaches 99.7% accuracy, stop training:
+# If train accuracy reaches 99.7% accuracy, stop training:
 threshold_stoppage_callback = ThresholdStoppageCallback(threshold=0.997)
 
 # +
@@ -276,11 +320,6 @@ del tokenized_data
 del dataset
 del combined_dataset
 
-# +
-# TODO: update file path to local:
-# model.load_weights('./data/saved_weights/distilroberta-base/weights_v2.h5')
-# -
-
 model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=lr_scheduler),
     loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -295,9 +334,9 @@ model_history = model.fit(
 )
 
 # Save weights:
-model.save_weights('../working/saved_weights/distilroberta-base/weights_v1.h5')
+model.save_weights('../models/saved_weights/distilroberta-base/weights_v1.h5')
 
-# ## Model Evaluation:
+# #### Model Evaluation:
 
 # +
 # Increase figure size:
@@ -348,4 +387,10 @@ print('Testset Accuracy:', accuracy_score(test_set_y, test_predictions))
 print('\n')
 print(classification_report(test_set_y, test_predictions))
 
+# ##### Analysis:
+# Our transformer network has a 99.86% F1 score on the train set and 99.40% on the test set, making it the best performing model of the three. Neural networks, especially attention-based networks, are intrinsically more sophisticated models that take into account word context, so it should be expected that it also performs the best. The model fit out dataset well, and importantly didn't over-fit, as evidenced by the fact that performance on train set dropped by only 0.46%.
+#
+# On the other hand, we spent more time setting up the model, creating various callbacks, etc. We trained the transformer model for 3 epochs (on GPU), but it still took ~83 minutes. This is expected though, as transformers are resource-intense. It might be worth reconsidering our SVM model by fine-tuning its hyperparameters, because that model also performed well but took a fraction of the time to train, so we would be able to iterate faster.
 
+# ## Improvements:
+# Although our transformer model achieved an F1 score of 99.86%, this doesn't fully capture the entire story. In real life, a false positive (a normal email classified as "spam") is far worse than a false negative (spam that is not classified as "spam"). For example, consider an email service that marks an important message as "spam" -- the user may never see that message, which would be a serious problem. So, our spam classification problem is far from complete. We should analyze our false positives and understand to what extent are emails being incorrectly classified as "spam."
