@@ -14,6 +14,10 @@
 # ---
 
 # # Spam Email Classification
+#
+# In this notebook, we will build an email spam classifier using the "Enron" datasets of the [Harvard email datasets for cross dataset experiments](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/V7IFSM). The Harvard datasets is an eclectic collection of email datasets, among them are 6 datasets of emails from employees of [Enron Corporation](https://en.wikipedia.org/wiki/Enron).
+#
+# We will experiment with a couple of "conventional" ML models and finally conclude with a more sophisticated neural network -- and see which of these models can successfully classify spam/non-spam emails and discern which model performs the best for our given dataset.
 
 # +
 import pandas as pd
@@ -35,7 +39,7 @@ import tensorflow as tf
 
 # ## Read files:
 #
-# The Enron email dataset is divided into 6 parts, each composed of `spam/` and `ham/` folders, where the former contains spam emails (.txt files) and the latter containing non-spam emails. We'll first consolidate all the spam and ham text files into a single `spam/` and `ham/` folder.
+# Each of the Enron datasets is composed of `spam/` and `ham/` folders, where `spam/` contains spam emails (.txt files) and `ham/` contains non-spam emails. We'll first consolidate all the spam and ham text files into a single `spam/` and `ham/` folder.
 #
 # Upon examination, we also notice that some of the documents are encoded in ISO-8859, which will cause issues as we try to process the data. We'll need to convert these files to UTF-8 or ASCII. One way we can convert the encoding is using Linux's `inconv` package, which is pre-installed in most distros.
 #
@@ -46,7 +50,7 @@ import tensorflow as tf
 
 # We'll now read all the files and store the text as a Pandas DataFrame. Since our emails are already split into `spam/` and `ham/` folders, we can simultaneously (and easily) label our data based on which folder we're reading from. We'll use `1` to delineate spam and `0` as non-spam emails.
 #
-# In this particular dataset, all the email headers -- other than the _Subject_ -- have already been removed. We also want to keep the _Subject_ header because it often contains useful information. So there's no pre-processing to be done at this step.
+# In this particular dataset, all the email headers (other than the _Subject_) have already been removed. We also want to keep the _Subject_ header because it often contains useful information. So there's no pre-processing to be done at this step.
 
 # ##### Read and save spam documents into a DataFrame:
 
@@ -103,7 +107,7 @@ test_set.to_csv('../data/test_set.csv', index=False)
 #
 # Let's get a better understanding of our data.
 #
-# We'll notice that our dataset fairly balanced. This means that _accuracy_ becomes a more viable metric -- in addition to the more conventional F1 score used in spam classification. But more importantly, we know that we have a sufficient number of both spam and ham examples for our ML models.
+# We'll notice that our dataset fairly balanced, and that we have a sufficient number of both spam and ham examples for our ML models.
 
 # +
 # Plot document count:
@@ -131,7 +135,7 @@ print('Ham Count:', len_ham)
 print('Spam Count:', len_spam)
 print('Total:', len_spam + len_ham)
 
-# We also take a look at the size (character length) of individual emails. Upon doing so, we'll notice that most of the emails are 720 characters or less. For comparison, a 500-word essay is approximately 3,000 - 3,500 characters. The largest document has an enormous 22,8377 characters. Since we will be creating a neural network (transformer), we will need our inputs to all be the same length (via truncating and padding). An input length of 22,000+ is far too large for our model, so we will need to decide that max length of our input before applying truncation.  Let's use 2,000 as the character limit -- only 19.25% of our data is larger than that size, and even if we lose information after truncation, we should be able to discern whether the email is spam or not by the 2,000 character mark.
+# We'll also take a look at the size (character length) of individual emails. Upon doing so, we'll notice that most of the emails are 720 characters or less. For comparison, a 500-word essay is approximately 3,000 - 3,500 characters. The largest document is an absurd 22,8377 characters in length. Since we will be creating a neural network (transformer), we will need our inputs to all be the same length (via truncating and padding). An input length of 22,000+ is far too large for such a model, so we will need to decide a max input length for truncation. Let's use 2,000 as the character limit -- only 19.25% of our data is larger than that size, and even if we lose information after truncation, we really should be able to discern whether the email is spam or not by the 2,000 character mark.
 
 # +
 map_len = combined_dataset['text'].map(len)
@@ -155,7 +159,7 @@ print(f'Percent of documents that have character length greater than 2,000: {per
 
 # ## Process Data:
 #
-# We will vectorize all the documents using TF-IDF (term frequency–inverse document frequency), which calculates the frequency of a word in a document. Scikit-learn has the built-in [TfidfVectorizer](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html) that does exactly this. But before we feed vectorized documents into our model pipeline, we should remove stop words from the documents -- we will use [spaCy](https://spacy.io/) for that.
+# We will vectorize all the documents using TF-IDF (term frequency–inverse document frequency), which calculates the frequency of a word in a document (and reduces the weight of common words). Scikit-learn has the built-in [TfidfVectorizer](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html) that does exactly this. But before we feed vectorized documents into our model pipeline, we should remove stop words from the documents -- we will use [spaCy](https://spacy.io/) for that.
 
 # We only need lemmatizer from spaCy; see <https://spacy.io/usage/processing-pipelines#disabling>
 nlp = spacy.load('en_core_web_trf',
@@ -180,7 +184,7 @@ print('Train size:', len(x_train))
 print('Test size:', len(x_test))
 
 # ## Support Vector Machine:
-# As machine learning is an iterative process, we will try a couple of "conventional" machine learning models and see how well they perform in spam classification. We'll first try Linear Support Vector Classification, a standard text classification model. To measure the performance of the model, we'll use both accuracy and F1 score.
+# Since machine learning is an iterative process, we will try a couple of "conventional" machine learning models and see how well they perform in spam classification. We'll first try Linear Support Vector Classification, a standard text classification model. To measure the performance of the model, we'll use both accuracy and F1 score.
 
 # +
 model_SVM = Pipeline(
@@ -204,10 +208,10 @@ print('Test F1 score:', f1_score(y_test, svm_test_predictions, average="macro"))
 print(classification_report(y_test, svm_test_predictions))
 
 # ###### Analysis:
-# We were able to train our model fairly quickly, and as you can see, has a 99.98% F1 score on the train set and 98.96% on the test set. So, it performed fairly well. The ~1% drop in performance between train and test sets probably indicates a small degree of over-fitting. SVMs tend to be resistant to over-fitting, but we could almost certainly improve upon on this by fine-tuning the regularization parameter, `C`.
+# We were able to train our model quickly, and as you can see, has a 99.98% F1 score on the train set and 98.96% on the test set. So, it performed fairly well. The ~1% drop in performance between train and test sets probably indicates a small degree of over-fitting. SVMs tend to be resistant to over-fitting, but we likely can improve upon on this by fine-tuning the regularization parameter, `C`.
 
 # ## XGBoost:
-# Gradient boosting, and specifically XGBoost, has become a popular choice for many ML tasks. Let's see how well the ensemble algorithm performs for our spam classification task. As a pre-processing step, we can TF-IDF vectorizer and stop words that we used earlier.
+# Gradient boosting, and specifically XGBoost, has become a popular choice for many ML tasks. Let's see how well the ensemble algorithm performs on our spam classification task. As a pre-processing step, we can use the same TF-IDF vectorizer and stop words that we used earlier.
 
 # +
 model_xgb = Pipeline([
@@ -233,9 +237,9 @@ print(classification_report(y_test, xgb_test_predictions))
 # The XGBoost model did relatively well (97.98% F1 score), but didn't fit our dataset as well Linear SVM. It also took noticeably more time to train than the SVM model.
 
 # ## Neural Network (Transformer):
-# Finally, we will build a more advanced model by creating a neural network. Unlike the previous models which used word frequencies, the neural network will "understand" the context of the words via [attention](https://arxiv.org/abs/1706.03762). As a result, we **don't** want to remove stop words in the documents; by stemming/lemmatizing we will be removing valuable information in the text.
+# Finally, we will build a more advanced model: a neural network. Unlike the previous models which used word frequencies, the neural network will "understand" the context of the words via [attention](https://arxiv.org/abs/1706.03762). As a result, we **don't** want to remove stop words in the documents; by stemming/lemmatizing we will be removing valuable information in the text.
 #
-# We'll use a pretrained model from [Hugging Face](https://huggingface.co), rather than creating a new one from scratch, and then fine-tune it to our specific task. We'll use [RoBERTa](https://arxiv.org/abs/1907.11692) architecture, which is an improved version of BERT; and more specifically, we'll use the ["distilled"](https://huggingface.co/distilroberta-base) version of RoBERTa, performs slightly worse than the regular RoBERTa, but has ~33% fewer parameters (and therefore is less resource intense and trains twice as fast).
+# We'll use a pretrained model from [Hugging Face](https://huggingface.co), rather than creating a new one from scratch, and then fine-tune it to our specific task. We'll use the [RoBERTa](https://arxiv.org/abs/1907.11692) architecture, which is an improved version of BERT; and more specifically, we'll use the ["distilled"](https://huggingface.co/distilroberta-base) version of RoBERTa, which performs slightly worse than regular RoBERTa, but has ~33% fewer parameters (and therefore is less resource intense and trains twice as fast).
 
 dataset = Dataset.from_pandas(train_set)
 
@@ -246,7 +250,7 @@ dataset = dataset.train_test_split(test_size=0.1)
 dataset = dataset.shuffle(seed=2)
 
 
-# As mentioned before, we will truncate the document if exceeds 2,000 characters. We also need to tokenize and pad our data.
+# As mentioned before, we will truncate the document if it exceeds 2,000 characters. We also need to tokenize and pad our data.
 
 # +
 def preprocess(examples):
@@ -263,7 +267,7 @@ batches_per_epoch = len(tokenized_data['train']) // batch_size
 total_train_steps = int(batches_per_epoch * num_epochs)
 
 # Although completely optional, we'll create a few additional callback functions:
-# 1. We'll create a [learning rate scheduler](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules), which is a Keras/TensorFlow implementation of learning rate decay.
+# 1. A [learning rate scheduler](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules), which is a Keras/TensorFlow implementation of learning rate decay.
 # 2. Saving checkpoints (model weights) after each epoch.
 # 3. Early stoppage if the model's train accuracy achieves 99.7% accuracy.
 
@@ -388,9 +392,9 @@ print('\n')
 print(classification_report(test_set_y, test_predictions))
 
 # ##### Analysis:
-# Our transformer network has a 99.86% F1 score on the train set and 99.40% on the test set, making it the best performing model of the three. Neural networks, especially attention-based networks, are intrinsically more sophisticated models that take into account word context, so it should be expected that it also performs the best. The model fit out dataset well, and importantly didn't over-fit, as evidenced by the fact that performance on train set dropped by only 0.46%.
+# Our transformer network has a 99.86% F1 score on the train set and 99.40% on the test set, making it the best performing model of the three. Neural networks, especially attention-based networks, are intrinsically more sophisticated models that take into account word context, so it should be expected that it also performs the best. The model fit out dataset well, and importantly, didn't over-fit -- as evidenced by the fact that performance on the train set dropped by only 0.46%.
 #
-# On the other hand, we spent more time setting up the model, creating various callbacks, etc. We trained the transformer model for 3 epochs (on GPU), but it still took ~83 minutes. This is expected though, as transformers are resource-intense. It might be worth reconsidering our SVM model by fine-tuning its hyperparameters, because that model also performed well but took a fraction of the time to train, so we would be able to iterate faster.
+# On the other hand, we spent more time setting up the model, creating various callbacks, etc. We trained the transformer model for 3 epochs (on GPU), but it still took ~83 minutes. This is expected though, as transformers are resource-intensive. It might be worth reconsidering our SVM model by fine-tuning its hyperparameters, because that model also performed well, but took a fraction of the time to train -- so we would be able to iterate faster on the SVM.
 
 # ## Improvements:
-# Although our transformer model achieved an F1 score of 99.86%, this doesn't fully capture the entire story. In real life, a false positive (a normal email classified as "spam") is far worse than a false negative (spam that is not classified as "spam"). For example, consider an email service that marks an important message as "spam" -- the user may never see that message, which would be a serious problem. So, our spam classification problem is far from complete. We should analyze our false positives and understand to what extent are emails being incorrectly classified as "spam."
+# Although our transformer model achieved an F1 score of 99.86%, this doesn't fully capture the problem task. In real life, a false positive (a normal email classified as "spam") is far worse than a false negative (spam that is not classified as "spam"). For example, consider an email service that marks an important message as "spam" -- the user may never see that message, which would be a serious problem. So, our spam classification problem is far from complete. We should analyze our false positives and understand to what extent are emails being incorrectly classified as "spam." Depending on the analysis, one possible way we could ameliorate false positives is by increasing the classification threshold (e.g. only classify an email as "spam" if the probability is greater than 0.8).
