@@ -27,6 +27,7 @@ import numpy as np
 import spacy
 from xgboost import XGBClassifier
 
+from sklearn.naive_bayes import MultinomialNB
 from sklearn.svm import LinearSVC
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -100,8 +101,8 @@ test_set = combined_dataset[train_test_split:]
 # -
 
 # Save data as csv:
-train_set.to_csv('../data/train_set.csv', index=False)
-test_set.to_csv('../data/test_set.csv', index=False)
+train_set.to_csv('./data/train_set.csv', index=False)
+test_set.to_csv('./data/test_set.csv', index=False)
 
 # ## Explore Data:
 #
@@ -183,8 +184,39 @@ y_test = test_set['label']
 print('Train size:', len(x_train))
 print('Test size:', len(x_test))
 
+# ## Multinomial Naive Bayes:
+#
+# Since machine learning is an iterative process, we will try a couple of "conventional" machine learning models and see how well they perform in spam classification. We'll first try multinomial Naive Bayes, which is simple probabilistic classifier. NB is a popular classifier, and although it's not as "sophisticated" as other models, it has an extremely short training duration, which will allow us to iterate quickly and fine-tune the model's hyperparameters.
+#
+# To measure the performance of the model, we'll use both accuracy and F1 score.
+
+# +
+model_NB = Pipeline(
+    [
+        ('vectorizer', TfidfVectorizer(stop_words=spacy_stopwords)),
+        ('classifier', MultinomialNB(alpha=0.01))
+    ])
+
+model_NB.fit(x_train, y_train)
+# -
+
+nb_train_predictions = model_NB.predict(x_train)
+nb_test_predictions = model_NB.predict(x_test)
+
+print('Train accuracy:', model_NB.score(x_train, y_train))
+print('Train F1 score:', f1_score(y_train, nb_train_predictions, average="macro"))
+print(classification_report(y_train, nb_train_predictions))
+print('\n')
+print('Test accuracy:', model_NB.score(x_test, y_test))
+print('Test F1 score:', f1_score(y_test, nb_test_predictions, average="macro"))
+print(classification_report(y_test, nb_test_predictions))
+
+# ##### Analysis:
+# After some trail-and-error, we were able to find an optimal `alpha` value and thereby increase the F1 score a bit from 98.57% (the default `alpha` value) to 99.05%. Training took only a few seconds, which is one of NB's strengths. However, Naive Bayes has its limitations, and further hyperparameter tuning probably won't result in any major performance improvements.
+
 # ## Support Vector Machine:
-# Since machine learning is an iterative process, we will try a couple of "conventional" machine learning models and see how well they perform in spam classification. We'll first try Linear Support Vector Classification, a standard text classification model. To measure the performance of the model, we'll use both accuracy and F1 score.
+#
+# Linear support vector classification is a standard text classification model. Let's see if we can improve on the performance of the Naive Bayes model.
 
 # +
 model_SVM = Pipeline(
@@ -234,7 +266,7 @@ print('Test F1 score:', f1_score(y_test, xgb_test_predictions, average="macro"))
 print(classification_report(y_test, xgb_test_predictions))
 
 # ##### Analysis:
-# The XGBoost model did relatively well (97.98% F1 score), but didn't fit our dataset as well Linear SVM. It also took noticeably more time to train than the SVM model.
+# The XGBoost model did relatively well (97.98% F1 score), but didn't fit our dataset as well Linear SVM or Naive Bayes. It also took noticeably more time to train than the previous two models.
 
 # ## Neural Network (Transformer):
 # Finally, we will build a more advanced model: a neural network. Unlike the previous models which used word frequencies, the neural network will "understand" the context of the words via [attention](https://arxiv.org/abs/1706.03762). As a result, we **don't** want to remove stop words in the documents; by stemming/lemmatizing we will be removing valuable information in the text.
@@ -394,7 +426,9 @@ print(classification_report(test_set_y, test_predictions))
 # ##### Analysis:
 # Our transformer network has a 99.86% F1 score on the train set and 99.40% on the test set, making it the best performing model of the three. Neural networks, especially attention-based networks, are intrinsically more sophisticated models that take into account word context, so it should be expected that it also performs the best. The model fit out dataset well, and importantly, didn't over-fit -- as evidenced by the fact that performance on the train set dropped by only 0.46%.
 #
-# On the other hand, we spent more time setting up the model, creating various callbacks, etc. We trained the transformer model for 3 epochs (on GPU), but it still took ~83 minutes. This is expected though, as transformers are resource-intensive. It might be worth reconsidering our SVM model by fine-tuning its hyperparameters, because that model also performed well, but took a fraction of the time to train -- so we would be able to iterate faster on the SVM.
+# On the other hand, we spent more time setting up the model, creating various callbacks, etc. We trained the transformer model for 3 epochs (on GPU), but it still took ~83 minutes. This is expected though, as transformers are resource-intensive. It might be worth reconsidering our SVM model by fine-tuning its hyperparameters, because that model also performed well, has more potential upside, and took a fraction of the time to train -- so we would be able to iterate faster on the SVM.
 
 # ## Improvements:
 # Although our transformer model achieved an F1 score of 99.40%, this doesn't fully capture the problem task. In real life, a false positive (a normal email classified as "spam") is far worse than a false negative (spam that is not classified as "spam"). For example, consider an email service that marks an important message as "spam" -- the user may never see that message, which would be a serious problem. So, our spam classification problem is far from complete. We should analyze our false positives and understand to what extent are emails being incorrectly classified as "spam." Depending on the analysis, one possible way we could ameliorate false positives is by increasing the classification threshold (e.g. only classify an email as "spam" if the probability is greater than 0.8).
+
+
