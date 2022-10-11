@@ -8,7 +8,7 @@
 #       format_version: '1.5'
 #       jupytext_version: 1.14.0
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
@@ -17,7 +17,22 @@
 #
 # In this notebook, we will build an email spam classifier using the "Enron" datasets of the [Harvard email datasets for cross dataset experiments](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/V7IFSM). The Harvard datasets is an eclectic collection of email datasets, among them are 6 datasets of emails from employees of [Enron Corporation](https://en.wikipedia.org/wiki/Enron).
 #
-# We will experiment with a couple of "conventional" ML models and finally conclude with a more sophisticated neural network -- and see which of these models can successfully classify spam/non-spam emails and discern which model performs the best for our given dataset.
+# We will experiment with a few "conventional" ML models and finally conclude with a more sophisticated neural network -- and see which of these models can successfully classify spam/non-spam emails and discern which model performs the best for our given dataset.
+#
+# ### Outline:
+# - **Data Preparation:**
+#     - [Read files](#Read-files:)
+#     - [Explore data](#Explore-Data:)
+#     - [Process data](#Process-Data:)
+# - **Building Models:**
+#     - [Naive Bayes](#Multinomial-Naive-Bayes:)
+#     - [Support Vector Machine](#Support-Vector-Machine:)
+#     - [XGBoost](#XGBoost:)
+#     - [Transformer Network](#Neural-Network-(Transformer):)
+#         - [Prepare dataset](#Neural-Network-(Transformer):)
+#         - [Setup callbacks](#Setup-callbacks:)
+#         - [Compile and train model](#Compile-and-train-model:)
+#         - [Model evaluation](#Model-Evaluation:)
 
 # +
 import pandas as pd
@@ -298,6 +313,8 @@ num_epochs = 15
 batches_per_epoch = len(tokenized_data['train']) // batch_size
 total_train_steps = int(batches_per_epoch * num_epochs)
 
+# #### Setup callbacks:
+#
 # Although completely optional, we'll create a few additional callback functions:
 # 1. A [learning rate scheduler](https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules), which is a Keras/TensorFlow implementation of learning rate decay.
 # 2. Saving checkpoints (model weights) after each epoch.
@@ -350,6 +367,8 @@ model = TFAutoModelForSequenceClassification.from_pretrained(
     MODEL_NAME,
     num_labels=2
 )
+
+# #### Compile and train model:
 
 # Free up some memory:
 del tokenized_data
@@ -430,5 +449,3 @@ print(classification_report(test_set_y, test_predictions))
 
 # ## Improvements:
 # Although our transformer model achieved an F1 score of 99.40%, this doesn't fully capture the problem task. In real life, a false positive (a normal email classified as "spam") is far worse than a false negative (spam that is not classified as "spam"). For example, consider an email service that marks an important message as "spam" -- the user may never see that message, which would be a serious problem. So, our spam classification problem is far from complete. We should analyze our false positives and understand to what extent are emails being incorrectly classified as "spam." Depending on the analysis, one possible way we could ameliorate false positives is by increasing the classification threshold (e.g. only classify an email as "spam" if the probability is greater than 0.8).
-
-
