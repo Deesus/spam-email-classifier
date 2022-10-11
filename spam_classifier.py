@@ -21,18 +21,18 @@
 #
 # ### Outline:
 # - **Data Preparation:**
-#     - [Read files](#Read-files:)
-#     - [Explore data](#Explore-Data:)
-#     - [Process data](#Process-Data:)
+#     - [Read files](#read-files)
+#     - [Explore data](#explore-data)
+#     - [Process data](#process-data)
 # - **Building Models:**
-#     - [Naive Bayes](#Multinomial-Naive-Bayes:)
-#     - [Support Vector Machine](#Support-Vector-Machine:)
-#     - [XGBoost](#XGBoost:)
-#     - [Neural Network (Transformer)](#Neural-Network:)
-#         - [Prepare dataset](#Neural-Network:)
-#         - [Setup callbacks](#Setup-callbacks:)
-#         - [Compile and train model](#Compile-and-train-model:)
-#         - [Model evaluation](#Model-Evaluation:)
+#     - [Naive Bayes](#multinomial-naive-bayes)
+#     - [Support Vector Machine](#support-vector-machine)
+#     - [XGBoost](#xgboost)
+#     - [Neural Network (Transformer)](#neural-network)
+#         - [Prepare dataset](#neural-network)
+#         - [Setup callbacks](#setup-callbacks)
+#         - [Compile and train model](#compile-and-train-model)
+#         - [Model evaluation](#model-evaluation)
 
 # +
 import pandas as pd
@@ -53,6 +53,7 @@ from transformers import AutoTokenizer, DataCollatorWithPadding, TFAutoModelForS
 import tensorflow as tf
 # -
 
+# <a name="read-files"></a>
 # ## Read files:
 #
 # Each of the Enron datasets is composed of `spam/` and `ham/` folders, where `spam/` contains spam emails (.txt files) and `ham/` contains non-spam emails. We'll first consolidate all the spam and ham text files into a single `spam/` and `ham/` folder.
@@ -119,6 +120,7 @@ test_set = combined_dataset[train_test_split:]
 train_set.to_csv('./data/train_set.csv', index=False)
 test_set.to_csv('./data/test_set.csv', index=False)
 
+# <a name="explore-data"></a>
 # ## Explore Data:
 #
 # Let's get a better understanding of our data.
@@ -173,6 +175,7 @@ percent_docs_over_2000 = combined_dataset['text'].map(lambda x: len(x) > MAX_CHA
 print(f'Percent of documents that have character length greater than 2,000: {percent_docs_over_2000 * 100:.2f}%')
 # -
 
+# <a name="process-data"></a>
 # ## Process Data:
 #
 # We will vectorize all the documents using TF-IDF (term frequency–inverse document frequency), which calculates the frequency of a word in a document (and reduces the weight of common words). Scikit-learn has the built-in [TfidfVectorizer](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html) that does exactly this. But before we feed vectorized documents into our model pipeline, we should remove stop words from the documents -- we will use [spaCy](https://spacy.io/) for that.
@@ -199,6 +202,7 @@ y_test = test_set['label']
 print('Train size:', len(x_train))
 print('Test size:', len(x_test))
 
+# <a name="multinomial-naive-bayes"></a>
 # ## Multinomial Naive Bayes:
 #
 # Since machine learning is an iterative process, we will try a couple of "conventional" machine learning models and see how well they perform in spam classification. We'll first try multinomial Naive Bayes, which is simple probabilistic classifier. NB is a popular classifier, and although it's not as "sophisticated" as other models, it has an extremely short training duration, which will allow us to iterate quickly and fine-tune the model's hyperparameters.
@@ -229,6 +233,7 @@ print(classification_report(y_test, nb_test_predictions))
 # ##### Analysis:
 # After some trail-and-error, we were able to find an optimal `alpha` value and thereby increase the F1 score a bit from 98.57% (the default `alpha` value) to 99.05%. Training took only a few seconds, which is one of NB's strengths. However, Naive Bayes has its limitations, and further hyperparameter tuning probably won't result in any major performance improvements.
 
+# <a name="support-vector-machine"></a>
 # ## Support Vector Machine:
 #
 # Linear support vector classification is a standard text classification model. Let's see if we can improve on the performance of the Naive Bayes model.
@@ -257,6 +262,7 @@ print(classification_report(y_test, svm_test_predictions))
 # ###### Analysis:
 # We were able to train our model quickly, and as you can see, has a 99.98% F1 score on the train set and 98.96% on the test set. So, it performed fairly well. The ~1% drop in performance between train and test sets probably indicates a small degree of over-fitting. SVMs tend to be resistant to over-fitting, but we likely can improve upon on this by fine-tuning the regularization parameter, `C`.
 
+# <a name="xgboost"></a>
 # ## XGBoost:
 # Gradient boosting, and specifically XGBoost, has become a popular choice for many ML tasks. Let's see how well the ensemble algorithm performs on our spam classification task. As a pre-processing step, we can use the same TF-IDF vectorizer and stop words that we used earlier.
 
@@ -283,6 +289,7 @@ print(classification_report(y_test, xgb_test_predictions))
 # ##### Analysis:
 # The XGBoost model did relatively well (97.98% F1 score), but didn't fit our dataset as well Linear SVM or Naive Bayes. It also took noticeably more time to train than the previous two models.
 
+# <a name="neural-network"></a>
 # ## Neural Network:
 # Finally, we will build a more advanced model: a neural network. Unlike the previous models which used word frequencies, the neural network will "understand" the context of the words via [attention](https://arxiv.org/abs/1706.03762). As a result, we **don't** want to remove stop words in the documents; by stemming/lemmatizing we will be removing valuable information in the text.
 #
@@ -313,6 +320,7 @@ num_epochs = 15
 batches_per_epoch = len(tokenized_data['train']) // batch_size
 total_train_steps = int(batches_per_epoch * num_epochs)
 
+# <a name="setup-callbacks"></a>
 # #### Setup callbacks:
 #
 # Although completely optional, we'll create a few additional callback functions:
@@ -368,6 +376,7 @@ model = TFAutoModelForSequenceClassification.from_pretrained(
     num_labels=2
 )
 
+# <a name="compile-and-train-model"></a>
 # #### Compile and train model:
 
 # Free up some memory:
@@ -391,6 +400,7 @@ model_history = model.fit(
 # Save weights:
 model.save_weights('../models/saved_weights/distilroberta-base/weights_v1.h5')
 
+# <a name="model-evaluation"></a>
 # #### Model Evaluation:
 
 # +
