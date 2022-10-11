@@ -363,17 +363,17 @@ tf_validation_set = tokenized_data['test'].to_tf_dataset(
 )
 # -
 
-model = TFAutoModelForSequenceClassification.from_pretrained(
-    MODEL_NAME,
-    num_labels=2
-)
-
 # #### Compile and train model:
 
 # Free up some memory:
 del tokenized_data
 del dataset
 del combined_dataset
+
+model = TFAutoModelForSequenceClassification.from_pretrained(
+    MODEL_NAME,
+    num_labels=2
+)
 
 model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=lr_scheduler),
