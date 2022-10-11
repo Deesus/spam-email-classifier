@@ -28,8 +28,8 @@
 #     - [Naive Bayes](#Multinomial-Naive-Bayes:)
 #     - [Support Vector Machine](#Support-Vector-Machine:)
 #     - [XGBoost](#XGBoost:)
-#     - [Transformer Network](#Neural-Network-(Transformer):)
-#         - [Prepare dataset](#Neural-Network-(Transformer):)
+#     - [Neural Network (Transformer)](#Neural-Network:)
+#         - [Prepare dataset](#Neural-Network:)
 #         - [Setup callbacks](#Setup-callbacks:)
 #         - [Compile and train model](#Compile-and-train-model:)
 #         - [Model evaluation](#Model-Evaluation:)
@@ -283,7 +283,7 @@ print(classification_report(y_test, xgb_test_predictions))
 # ##### Analysis:
 # The XGBoost model did relatively well (97.98% F1 score), but didn't fit our dataset as well Linear SVM or Naive Bayes. It also took noticeably more time to train than the previous two models.
 
-# ## Neural Network (Transformer):
+# ## Neural Network:
 # Finally, we will build a more advanced model: a neural network. Unlike the previous models which used word frequencies, the neural network will "understand" the context of the words via [attention](https://arxiv.org/abs/1706.03762). As a result, we **don't** want to remove stop words in the documents; by stemming/lemmatizing we will be removing valuable information in the text.
 #
 # We'll use a pretrained model from [Hugging Face](https://huggingface.co), rather than creating a new one from scratch, and then fine-tune it to our specific task. We'll use the [RoBERTa](https://arxiv.org/abs/1907.11692) architecture, which is an improved version of BERT; and more specifically, we'll use the ["distilled"](https://huggingface.co/distilroberta-base) version of RoBERTa, which performs slightly worse than regular RoBERTa, but has ~33% fewer parameters (and therefore is less resource intense and trains twice as fast).
